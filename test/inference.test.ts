@@ -42,4 +42,48 @@ describe("Query Builder Tests", () => {
         expect(sql).toBe("SELECT id, name FROM users WHERE isActive = $1 LIMIT 10 OFFSET 0");
         expect(values).toEqual([true]);
     });
+
+    test("query builder generates correct SQL for insert", () => {
+        const adapter = new DummyAdapter() as any;
+        const db = createDB(schema, adapter);
+
+        const query = db.query("users")
+            .insert({ name: "Fauzi", email: "test@example.com", isActive: true });
+        
+        const { sql, values } = query.toSQL();
+        
+        // Order of keys depends on JS engine but usually insertion order
+        expect(sql).toContain("INSERT INTO users");
+        expect(sql).toContain("name, email, isActive");
+        expect(sql).toContain("RETURNING *");
+        expect(values).toHaveLength(3);
+    });
+
+    test("query builder generates correct SQL for update", () => {
+        const adapter = new DummyAdapter() as any;
+        const db = createDB(schema, adapter);
+
+        const query = db.query("users")
+            .update({ isActive: false })
+            .where("id", "=", 123);
+        
+        const { sql, values } = query.toSQL();
+        
+        expect(sql).toBe("UPDATE users SET isActive = $1 WHERE id = $2 RETURNING *");
+        expect(values).toEqual([false, 123]);
+    });
+
+    test("query builder generates correct SQL for delete", () => {
+        const adapter = new DummyAdapter() as any;
+        const db = createDB(schema, adapter);
+
+        const query = db.query("posts")
+            .delete()
+            .where("id", "=", 999);
+        
+        const { sql, values } = query.toSQL();
+        
+        expect(sql).toBe("DELETE FROM posts WHERE id = $1 RETURNING *");
+        expect(values).toEqual([999]);
+    });
 });

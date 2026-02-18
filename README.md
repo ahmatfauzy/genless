@@ -11,12 +11,13 @@
 
 ## Installation
 
-```bash
+COMING SOON
+<!-- ```bash
 # Install genless and dependencies
 npm install genless pg
 # or
 bun add genless pg
-```
+``` -->
 
 > **Note**: You must install `pg` separately as it is a peer dependency for PostgreSQL support.
 
@@ -47,13 +48,34 @@ const db = createDB({
 
 // 2. Query Data
 async function main() {
-  // Select specific columns with type inference
+  // A. SELECT
   const users = await db.query('users')
     .select('id', 'name')
     .where('name', '=', 'Alice')
     .limit(10);
   
   console.log(users); // inferred as { id: number, name: string }[]
+
+  // B. INSERT
+  const newUser = await db.query('users')
+    .insert({
+      id: 1, // ID handling depends on DB (autoincrement supported by DB, but type generic requires match)
+      name: 'Bob',
+      email: 'bob@example.com',
+      created_at: new Date()
+    });
+  
+  console.log(newUser); // Returns the inserted row(s)
+
+  // C. UPDATE
+  const updated = await db.query('posts')
+    .update({ published: true })
+    .where('id', '=', 101);
+
+  // D. DELETE
+  await db.query('posts')
+    .delete()
+    .where('id', '=', 102);
   
   // Close connection when done
   await db.close();

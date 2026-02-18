@@ -1,0 +1,32 @@
+- [x] Runtime-first schema definition
+- [x] TypeScript type inference (Zero Codegen)
+- [x] Modular project structure params (core, adapters, query)
+- [x] Build system (Bun + tsc declaration emit)
+- [x] SELECT operation
+- [x] INSERT operation
+- [x] UPDATE operation
+- [x] DELETE operation
+- [x] SELECT * (All columns support)
+- [x] Basic WHERE clause (AND only)
+- [x] LIMIT & OFFSET support
+- [x] Adapter Interface definition
+- [x] PostgreSQL Adapter (peer dependency: pg)
+- [x] Dummy/Test Adapter
+- [ ] **Table Synchronization (DDL)**: `db.createTables()` to auto-generate SQL tables from JS schema
+- [ ] **Advanced Filtering**: Support `OR`, `IN`, `LIKE`, `IS NULL`, `BETWEEN`
+- [ ] **Data Types**: Support JSON, UUID, Enum, Arrays
+- [ ] **Transactions**: `db.transaction(...)` API
+- [ ] **Joins**: Basic `LEFT JOIN` / `INNER JOIN` support
+- [ ] **Migrations**: Basic migration system based on schema diff
+- [ ] **Pool Management**: Better connection pooling options exposed in Adapter
+- [ ] **Logger / Debug Mode**: Built-in query logger to inspect generated SQL
+- [ ] **Soft Delete**: Native support for `deleted_at` handling
+- [ ] **Seeders**: Helper to populate initial data
+- [ ] **CLI**: Optional CLI for scaffolding or database reset
+- [ ] **Parameter Validation**: Runtime check for input values against schema types
+- [ ] **Query Timeout**: Support canceling long-running queries
+- [ ] **Telemetry**: Hooks for monitoring (OpenTelemetry support)
+- [x] README with usage examples
+- [x] LICENSE file (MIT)
+- [ ] JSDoc comments for all public APIs
+- [ ] Comprehensive integration tests with real DB
