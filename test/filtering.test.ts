@@ -1,95 +1,91 @@
 
-import { test, expect } from "bun:test";
-import { createDB } from "../src/core/database";
-import { DummyAdapter } from "../src/adapters/dummy";
+import { test } from "node:test";
+import assert from "node:assert";
+import { createDB } from "../src/core/database.js";
+import { DummyAdapter } from "../src/adapters/dummy.js";
 
-const db = createDB({
+const schema = {
   users: {
     id: Number,
     name: String,
     age: Number,
     status: String,
+    deletedAt: Date
   }
-}, new DummyAdapter());
+};
 
 test("Advanced Filtering - OR", async () => {
     const adapter = new DummyAdapter();
-    const db = createDB({ users: { id: Number, name: String } }, adapter);
-    
+    const db = createDB(schema, adapter);
+
     await db.query('users')
         .where({ name: 'John' })
         .orWhere({ name: 'Doe' })
         .execute();
+
+    const logs = adapter.logs;
+    const lastLog = logs[logs.length - 1];
     
-    const sql = adapter.logs[0].sql;
-    expect(sql).toContain("name = $1");
-    expect(sql).toContain("OR name = $2");
+    assert.strictEqual(lastLog.sql, 'SELECT * FROM "users" WHERE "name" = $1 OR "name" = $2');
+    assert.deepStrictEqual(lastLog.params, ["John", "Doe"]);
 });
 
 test("Advanced Filtering - IN", async () => {
     const adapter = new DummyAdapter();
-    const db = createDB({ users: { id: Number, status: String } }, adapter);
-    
+    const db = createDB(schema, adapter);
+
     await db.query('users')
         .where({ status: { in: ['active', 'pending'] } })
         .execute();
+
+    const logs = adapter.logs;
+    const lastLog = logs[logs.length - 1];
     
-    const sql = adapter.logs[0].sql;
-    expect(sql).toContain("status IN ($1, $2)");
-    expect(adapter.logs[0].params).toEqual(['active', 'pending']);
+    assert.strictEqual(lastLog.sql, 'SELECT * FROM "users" WHERE "status" IN ($1, $2)');
+    assert.deepStrictEqual(lastLog.params, ["active", "pending"]);
 });
 
 test("Advanced Filtering - LIKE", async () => {
     const adapter = new DummyAdapter();
-    const db = createDB({ users: { name: String } }, adapter);
-    
+    const db = createDB(schema, adapter);
+
     await db.query('users')
         .where({ name: { like: '%John%' } })
         .execute();
+
+    const logs = adapter.logs;
+    const lastLog = logs[logs.length - 1];
     
-    expect(adapter.logs[0].sql).toContain("name LIKE $1");
-    expect(adapter.logs[0].params).toEqual(['%John%']);
+    assert.strictEqual(lastLog.sql, 'SELECT * FROM "users" WHERE "name" LIKE $1');
+    assert.deepStrictEqual(lastLog.params, ["%John%"]);
 });
 
 test("Advanced Filtering - Comparison", async () => {
     const adapter = new DummyAdapter();
-    const db = createDB({ users: { age: Number } }, adapter);
-    
+    const db = createDB(schema, adapter);
+
     await db.query('users')
         .where({ age: { gt: 18, lte: 60 } })
         .execute();
+
+    const logs = adapter.logs;
+    const lastLog = logs[logs.length - 1];
     
-    // Should produce: age > $1 AND age <= $2
-    // Note: The order depends on object iteration order, which is generally insertion order for simple keys
-    const sql = adapter.logs[0].sql;
-    expect(sql).toContain("age > $1");
-    expect(sql).toContain("age <= $2"); 
-    // AND is implicit between multiple keys/conditions in one object? 
-    // Wait, multiple keys in one object = AND. Multiple conditions on one key = AND too usually?
-    // My implementation: 
-    /*
-      for (const [key, val] of Object.entries(conditions)) {
-          // ... 
-          if ("gt" in ops) this._where.push(...)
-          if ("lt" in ops) this._where.push(...)
-      }
-    */
-    // They are pushed as separate WHERE clauses.
-    // _toSQL joins them with " AND " (or " OR " based on type).
-    // But wait, the _addWhere adds them all with type "AND" (if called via .where).
-    // Yes.
-    
-    // Let's verify structure
-    expect(sql).toMatch(/age > \$1 AND (AND )?age <= \$2/);
+    assert.strictEqual(lastLog.sql, 'SELECT * FROM "users" WHERE "age" > $1 AND "age" <= $2');
+    assert.deepStrictEqual(lastLog.params, [18, 60]);
 });
 
 test("Advanced Filtering - IS NULL", async () => {
     const adapter = new DummyAdapter();
-    const db = createDB({ users: { deletedAt: Date } }, adapter);
-    
+    const db = createDB(schema, adapter);
+
     await db.query('users')
         .where({ deletedAt: null })
         .execute();
-        
-    expect(adapter.logs[0].sql).toContain("deletedAt IS NULL");
+
+    const logs = adapter.logs;
+    const lastLog = logs[logs.length - 1];
+    
+    assert.strictEqual(lastLog.sql, 'SELECT * FROM "users" WHERE "deletedAt" IS NULL');
+    assert.deepStrictEqual(lastLog.params, []);
 });

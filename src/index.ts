@@ -1,12 +1,12 @@
 
 // Core
-export * from "./core/database";
-export * from "./core/adapter";
-export * from "./adapters/pg";
-export * from "./adapters/dummy";
+export * from "./core/database.js";
+export * from "./core/adapter.js";
+export * from "./adapters/pg.js";
+export * from "./adapters/dummy.js";
 
 // Query Builder
-export * from "./query/builder";
+export * from "./query/builder.js";
 
 // Schema Helpers (Primitives)
 export const number = Number;
@@ -15,8 +15,8 @@ export const boolean = Boolean;
 export const date = Date;
 
 // Schema Helpers (Advanced Types)
-export { json, uuid, enumType, arrayType } from "./types/schema";
+export { json, uuid, enumType, arrayType } from "./types/schema.js";
 
 // Types
-export * from "./types/schema";
+export * from "./types/schema.js";
 

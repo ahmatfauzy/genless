@@ -1,7 +1,7 @@
 {
-  "name": "PawQL",
-  "version": "0.1.0",
-  "description": "Runtime-first, type-safe database query builder for Node.js without code generation.",
+  "name": "pawql",
+  "version": "0.2.0",
+  "description": "The Runtime-First ORM for TypeScript. Type-safe database query builder with zero code generation.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -9,30 +9,51 @@
   "exports": {
     ".": {
       "import": "./dist/index.js",
-      "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node --external pg && tsc --emitDeclarationOnly --outDir ./dist",
-    "prepublishOnly": "bun run build",
-    "test": "bun test"
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build",
+    "test": "npx tsx --test test/*.test.ts",
+    "test:watch": "npx tsx --test --watch test/*.test.ts",
+    "test:bun": "bun test"
   },
   "keywords": [
-    "database",
+    "orm",
     "query-builder",
     "typescript",
+    "database",
+    "postgres",
+    "postgresql",
+    "sql",
+    "type-safe",
     "runtime",
-    "type-safe"
+    "zero-codegen",
+    "no-codegen",
+    "drizzle",
+    "prisma",
+    "typeorm"
   ],
-  "author": "",
+  "author": "Ahmat Fauzi",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ahmatfauzy/pawql-orm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ahmatfauzy/pawql-orm/issues"
+  },
+  "homepage": "https://github.com/ahmatfauzy/pawql-orm#readme",
   "devDependencies": {
     "@types/bun": "latest",
     "@types/pg": "^8.16.0",
+    "tsx": "^4.19.0",
     "typescript": "^5"
   },
   "peerDependencies": {

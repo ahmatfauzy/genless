@@ -18,6 +18,12 @@ export interface DatabaseAdapter {
   query<T = any>(sql: string, params?: any[]): Promise<QueryResult<T>>;
 
   /**
+   * Execute a callback within a database transaction.
+   * @param callback Function to execute within the transaction scope
+   */
+  transaction<T>(callback: (trx: DatabaseAdapter) => Promise<T>): Promise<T>;
+
+  /**
    * Disconnect from the database.
    */
   close(): Promise<void>;

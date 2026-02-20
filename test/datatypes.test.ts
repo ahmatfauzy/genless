@@ -1,8 +1,9 @@
 
-import { test, expect } from "bun:test";
-import { createDB } from "../src/core/database";
-import { DummyAdapter } from "../src/adapters/dummy";
-import { json, uuid, enumType, arrayType } from "../src/types/schema";
+import { test } from "node:test";
+import assert from "node:assert";
+import { createDB } from "../src/core/database.js";
+import { DummyAdapter } from "../src/adapters/dummy.js";
+import { json, uuid, enumType, arrayType } from "../src/types/schema.js";
 
 // ============================================
 // Type Inference Tests (compile-time checks)
@@ -17,11 +18,10 @@ test("Data Types - JSON type inference", () => {
     }
   }, adapter);
 
-  // This test primarily validates that the code compiles.
-  // At runtime, just verify the schema is stored correctly.
   const schema = db.schema;
-  expect(schema.products.metadata).toBeDefined();
-  expect(schema.products.metadata._brand).toBe("json");
+  assert.ok(schema.products.metadata);
+  // @ts-ignore
+  assert.strictEqual(schema.products.metadata._brand, "json");
 });
 
 test("Data Types - UUID type inference", () => {
@@ -33,7 +33,8 @@ test("Data Types - UUID type inference", () => {
     }
   }, adapter);
 
-  expect(db.schema.users.id._brand).toBe("uuid");
+  // @ts-ignore
+  assert.strictEqual(db.schema.users.id._brand, "uuid");
 });
 
 test("Data Types - Enum type inference", () => {
@@ -45,8 +46,10 @@ test("Data Types - Enum type inference", () => {
     }
   }, adapter);
 
-  expect(db.schema.users.role._brand).toBe("enum");
-  expect(db.schema.users.role.values).toEqual(['admin', 'user', 'guest']);
+  // @ts-ignore
+  assert.strictEqual(db.schema.users.role._brand, "enum");
+  // @ts-ignore
+  assert.deepStrictEqual(db.schema.users.role.values, ['admin', 'user', 'guest']);
 });
 
 test("Data Types - Array type inference", () => {
@@ -58,8 +61,10 @@ test("Data Types - Array type inference", () => {
     }
   }, adapter);
 
-  expect(db.schema.posts.tags._brand).toBe("array");
-  expect(db.schema.posts.tags.itemType).toBe(String);
+  // @ts-ignore
+  assert.strictEqual(db.schema.posts.tags._brand, "array");
+  // @ts-ignore
+  assert.strictEqual(db.schema.posts.tags.itemType, String);
 });
 
 // ============================================
@@ -78,7 +83,7 @@ test("DDL - JSON column generates JSONB", async () => {
   await db.createTables();
 
   const sql = adapter.logs[0].sql;
-  expect(sql).toContain("metadata JSONB NOT NULL");
+  assert.ok(sql.includes('"metadata" JSONB NOT NULL'));
 });
 
 test("DDL - UUID column generates UUID", async () => {
@@ -93,7 +98,7 @@ test("DDL - UUID column generates UUID", async () => {
   await db.createTables();
 
   const sql = adapter.logs[0].sql;
-  expect(sql).toContain("id UUID NOT NULL");
+  assert.ok(sql.includes('"id" UUID NOT NULL'));
 });
 
 test("DDL - Enum column generates TEXT with CHECK", async () => {
@@ -108,7 +113,7 @@ test("DDL - Enum column generates TEXT with CHECK", async () => {
   await db.createTables();
 
   const sql = adapter.logs[0].sql;
-  expect(sql).toContain("role TEXT NOT NULL CHECK (role IN ('admin', 'user', 'guest'))");
+  assert.ok(sql.includes(`"role" TEXT NOT NULL CHECK ("role" IN ('admin', 'user', 'guest'))`));
 });
 
 test("DDL - Array column generates TYPE[]", async () => {
@@ -124,8 +129,8 @@ test("DDL - Array column generates TYPE[]", async () => {
   await db.createTables();
 
   const sql = adapter.logs[0].sql;
-  expect(sql).toContain("tags TEXT[] NOT NULL");
-  expect(sql).toContain("scores INTEGER[] NOT NULL");
+  assert.ok(sql.includes('"tags" TEXT[] NOT NULL'));
+  assert.ok(sql.includes('"scores" INTEGER[] NOT NULL'));
 });
 
 test("DDL - Mixed schema with all new types", async () => {
@@ -144,11 +149,11 @@ test("DDL - Mixed schema with all new types", async () => {
   await db.createTables();
 
   const sql = adapter.logs[0].sql;
-  expect(sql).toContain("CREATE TABLE IF NOT EXISTS events");
-  expect(sql).toContain("id UUID NOT NULL");
-  expect(sql).toContain("name TEXT NOT NULL");
-  expect(sql).toContain("type TEXT NOT NULL CHECK");
-  expect(sql).toContain("tags TEXT[] NOT NULL");
-  expect(sql).toContain("details JSONB NOT NULL");
-  expect(sql).toContain("createdAt TIMESTAMP NOT NULL");
+  assert.ok(sql.includes('CREATE TABLE IF NOT EXISTS "events"'));
+  assert.ok(sql.includes('"id" UUID NOT NULL'));
+  assert.ok(sql.includes('"name" TEXT NOT NULL'));
+  assert.ok(sql.includes('"type" TEXT NOT NULL CHECK'));
+  assert.ok(sql.includes('"tags" TEXT[] NOT NULL'));
+  assert.ok(sql.includes('"details" JSONB NOT NULL'));
+  assert.ok(sql.includes('"createdAt" TIMESTAMP NOT NULL'));
 });

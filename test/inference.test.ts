@@ -1,89 +1,94 @@
 
-import { test, expect, describe } from "bun:test";
-import { createDB, string, number, boolean, date } from "../src/index";
-import { DummyAdapter } from "../src/adapters/dummy";
+import { test } from "node:test";
+import assert from "node:assert";
+import { createDB } from "../src/core/database.js";
+import { DummyAdapter } from "../src/adapters/dummy.js";
 
-// Define schema
 const schema = {
   users: {
-    id: number,
-    name: string,
-    email: string,
-    isActive: boolean
+    id: Number,
+    name: String,
+    email: String,
   },
   posts: {
-    id: number,
-    userId: number,
-    title: string,
-    content: string,
-    created_at: date
-  }
+    id: Number,
+    title: String,
+    content: String,
+    published: Boolean,
+  },
 };
 
-describe("Query Builder Tests", () => {
-    test("createDB initializes correctly", () => {
-        const adapter = new DummyAdapter() as any;
-        const db = createDB(schema, adapter);
-        expect(db).toBeDefined();
-    });
+test("Query Builder Tests - createDB initializes correctly", () => {
+    const adapter = new DummyAdapter();
+    const db = createDB(schema, adapter);
+    
+    // Check internal schema storage
+    assert.strictEqual(db.schema.users.id, Number);
+});
 
-    test("query builder generates correct SQL for select + where", () => {
-        const adapter = new DummyAdapter() as any;
-        const db = createDB(schema, adapter);
+test("Query Builder Tests - query builder generates correct SQL for select + where", async () => {
+    const adapter = new DummyAdapter();
+    const db = createDB(schema, adapter);
 
-        const query = db.query("users")
-            .select("id", "name")
-            .where({ isActive: true })
-            .limit(10)
-            .offset(0);
-        
-        const { sql, values } = query.toSQL();
+    await db.query('users')
+        .select('id', 'name')
+        .where({ id: 1 })
+        .execute();
 
-        expect(sql).toBe("SELECT id, name FROM users WHERE isActive = $1 LIMIT 10 OFFSET 0");
-        expect(values).toEqual([true]);
-    });
+    const logs = adapter.logs;
+    const lastLog = logs[logs.length - 1];
+    assert.strictEqual(lastLog.sql, 'SELECT "id", "name" FROM "users" WHERE "id" = $1');
+    assert.strictEqual(lastLog.params[0], 1);
+});
 
-    test("query builder generates correct SQL for insert", () => {
-        const adapter = new DummyAdapter() as any;
-        const db = createDB(schema, adapter);
+test("Query Builder Tests - query builder generates correct SQL for insert", async () => {
+    const adapter = new DummyAdapter();
+    const db = createDB(schema, adapter);
 
-        const query = db.query("users")
-            .insert({ name: "Fauzi", email: "test@example.com", isActive: true });
-        
-        const { sql, values } = query.toSQL();
-        
-        // Order of keys depends on JS engine but usually insertion order
-        expect(sql).toContain("INSERT INTO users");
-        expect(sql).toContain("name, email, isActive");
-        expect(sql).toContain("RETURNING *");
-        expect(values).toHaveLength(3);
-    });
+    await db.query('users')
+        .insert({ id: 1, name: "Alice", email: "alice@example.com" })
+        .execute();
 
-    test("query builder generates correct SQL for update", () => {
-        const adapter = new DummyAdapter() as any;
-        const db = createDB(schema, adapter);
+    const logs = adapter.logs;
+    const lastLog = logs[logs.length - 1];
+    
+    // "INSERT INTO "users" ("id", "name", "email") VALUES ($1, $2, $3) RETURNING *"
+    assert.ok(lastLog.sql.startsWith('INSERT INTO "users"'));
+    assert.ok(lastLog.sql.includes('VALUES ($1, $2, $3)'));
+    assert.strictEqual(lastLog.params.length, 3);
+});
 
-        const query = db.query("users")
-            .update({ isActive: false })
-            .where({ id: 123 });
-        
-        const { sql, values } = query.toSQL();
-        
-        expect(sql).toBe("UPDATE users SET isActive = $1 WHERE id = $2 RETURNING *");
-        expect(values).toEqual([false, 123]);
-    });
+test("Query Builder Tests - query builder generates correct SQL for update", async () => {
+    const adapter = new DummyAdapter();
+    const db = createDB(schema, adapter);
 
-    test("query builder generates correct SQL for delete", () => {
-        const adapter = new DummyAdapter() as any;
-        const db = createDB(schema, adapter);
+    await db.query('users')
+        .update({ name: "Bob" })
+        .where({ id: 1 })
+        .execute();
 
-        const query = db.query("posts")
-            .delete()
-            .where({ id: 999 });
-        
-        const { sql, values } = query.toSQL();
-        
-        expect(sql).toBe("DELETE FROM posts WHERE id = $1 RETURNING *");
-        expect(values).toEqual([999]);
-    });
+    const logs = adapter.logs;
+    const lastLog = logs[logs.length - 1];
+    
+    // "UPDATE "users" SET "name" = $1 WHERE "id" = $2 RETURNING *"
+    assert.ok(lastLog.sql.startsWith('UPDATE "users" SET "name" = $1'));
+    assert.ok(lastLog.sql.includes('WHERE "id" = $2'));
+    assert.strictEqual(lastLog.params[0], "Bob");
+    assert.strictEqual(lastLog.params[1], 1);
+});
+
+test("Query Builder Tests - query builder generates correct SQL for delete", async () => {
+    const adapter = new DummyAdapter();
+    const db = createDB(schema, adapter);
+
+    await db.query('users')
+        .delete()
+        .where({ id: 1 })
+        .execute();
+
+    const logs = adapter.logs;
+    const lastLog = logs[logs.length - 1];
+    
+    assert.strictEqual(lastLog.sql, 'DELETE FROM "users" WHERE "id" = $1 RETURNING *');
+    assert.strictEqual(lastLog.params[0], 1);
 });

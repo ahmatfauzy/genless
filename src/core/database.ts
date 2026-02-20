@@ -1,7 +1,7 @@
 
-import { DatabaseAdapter } from "./adapter";
-import { DatabaseSchema, TableSchema, InferTableType, JsonType, UuidType, EnumType, ArrayType, ColumnConstructor } from "../types/schema";
-import { QueryBuilder } from "../query/builder";
+import { DatabaseAdapter } from "./adapter.js";
+import { DatabaseSchema, TableSchema, InferTableType, JsonType, UuidType, EnumType, ArrayType, ColumnConstructor } from "../types/schema.js";
+import { QueryBuilder } from "../query/builder.js";
 
 export class Database<TSchema extends DatabaseSchema> {
   private _schema: TSchema;
@@ -15,9 +15,9 @@ export class Database<TSchema extends DatabaseSchema> {
   /**
    * Start a query on a specific table.
    */
-  query<K extends keyof TSchema & string>(tableName: K): QueryBuilder<InferTableType<TSchema[K]>> {
+  query<K extends keyof TSchema & string>(tableName: K): QueryBuilder<InferTableType<TSchema[K]>, InferTableType<TSchema[K]>, TSchema> {
     // In a real implementation, we would validate that the table exists in the schema.
-    return new QueryBuilder<InferTableType<TSchema[K]>>(tableName, this._adapter);
+    return new QueryBuilder<InferTableType<TSchema[K]>, InferTableType<TSchema[K]>, TSchema>(tableName, this._adapter);
   }
 
   /**
@@ -34,6 +34,12 @@ export class Database<TSchema extends DatabaseSchema> {
     await this._adapter.close();
   }
 
+  // Helper to quote identifiers
+  private _quote(identifier: string): string {
+    if (identifier.startsWith('"')) return identifier;
+    return `"${identifier}"`;
+  }
+
   /**
     * Synchronize schema with database (DDL).
     * Creates tables if they don't exist.
@@ -44,8 +50,9 @@ export class Database<TSchema extends DatabaseSchema> {
       
       for (const [colName, colSchema] of Object.entries(tableSchema as any)) {
         const schema = colSchema as any; 
+        const quotedCol = this._quote(colName);
         
-        let sql = `${colName} `;
+        let sql = `${quotedCol} `;
         
         // Determine type and attributes
         let type: any;
@@ -100,11 +107,11 @@ export class Database<TSchema extends DatabaseSchema> {
         // Enum CHECK constraint
         if (type instanceof EnumType && type.values.length > 0) {
           const allowed = type.values.map((v: string) => `'${v}'`).join(', ');
-          sql += ` CHECK (${colName} IN (${allowed}))`;
+          sql += ` CHECK (${quotedCol} IN (${allowed}))`;
         }
 
         if (defaultValue !== undefined) {
-          if (typeof defaultValue === 'string') sql += ` DEFAULT '${defaultValue}'`;
+          if (typeof defaultValue === 'string') sql += ` DEFAULT '${defaultValue.replace(/'/g, "''")}'`;
           else if (typeof defaultValue === 'number') sql += ` DEFAULT ${defaultValue}`;
           else if (typeof defaultValue === 'boolean') sql += ` DEFAULT ${defaultValue ? 'TRUE' : 'FALSE'}`;
           else if (defaultValue instanceof Date) sql += ` DEFAULT '${defaultValue.toISOString()}'`;
@@ -113,9 +120,21 @@ export class Database<TSchema extends DatabaseSchema> {
         columns.push(sql);
       }
 
-      const createTableSql = `CREATE TABLE IF NOT EXISTS ${tableName} (\n  ${columns.join(',\n  ')}\n);`;
+      const createTableSql = `CREATE TABLE IF NOT EXISTS ${this._quote(tableName)} (\n  ${columns.join(',\n  ')}\n);`;
       await this._adapter.query(createTableSql);
     }
+  }
+
+  /**
+   * Run a callback within a transaction.
+   * The callback receives a new Database instance scoped to the transaction.
+   */
+  async transaction<T>(callback: (tx: Database<TSchema>) => Promise<T>): Promise<T> {
+    return this._adapter.transaction(async (trxAdapter: DatabaseAdapter) => {
+      // Create a lightweight copy of the DB class with the transaction adapter
+      const txDb = new Database(this._schema, trxAdapter);
+      return callback(txDb);
+    });
   }
 }
 
@@ -128,3 +147,4 @@ export function createDB<TSchema extends DatabaseSchema>(
 ): Database<TSchema> {
   return new Database(schema, adapter);
 }
+

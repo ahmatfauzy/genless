@@ -1,40 +1,32 @@
-
-import { test, expect } from "bun:test";
-import { createDB } from "../src/core/database";
-import { DummyAdapter } from "../src/adapters/dummy";
+import { test } from "node:test";
+import assert from "node:assert";
+import { createDB } from "../src/core/database.js";
+import { DummyAdapter } from "../src/adapters/dummy.js";
 
 test("DDL Generation - single table", async () => {
-  const adapter = new DummyAdapter();
-  const db = createDB({
-    users: {
-      id: { type: Number, primaryKey: true },
-      name: String,
-      email: { type: String, nullable: true },
-      isActive: { type: Boolean, default: true },
-      score: { type: Number, default: 0 }
-    }
-  }, adapter);
+    const adapter = new DummyAdapter();
+    const db = createDB({
+        users: {
+            id: { type: Number, primaryKey: true },
+            name: String,
+            email: { type: String, nullable: true },
+            isActive: { type: Boolean, default: true },
+            score: { type: Number, default: 0 }
+        }
+    }, adapter);
 
-  await db.createTables();
+    await db.createTables();
 
-  const logs = adapter.logs;
-  expect(logs.length).toBe(1);
-  
-  const sql = logs[0].sql;
-  
-  // Basic structure
-  expect(sql).toContain("CREATE TABLE IF NOT EXISTS users");
-  
-  // Columns
-  expect(sql).toContain("id INTEGER PRIMARY KEY");
-  expect(sql).toContain("name TEXT NOT NULL");
-  expect(sql).toContain("email TEXT"); // nullable, so no NOT NULL
-  expect(sql).not.toContain("email TEXT NOT NULL");
-  
-  // Defaults
-  // By default columns are NOT NULL
-  expect(sql).toContain("isActive BOOLEAN NOT NULL DEFAULT TRUE"); 
-  expect(sql).toContain("score INTEGER NOT NULL DEFAULT 0");
+    const logs = adapter.logs;
+    assert.strictEqual(logs.length, 1);
+    const sql = logs[0].sql;
+    
+    assert.ok(sql.includes('CREATE TABLE IF NOT EXISTS "users"'));
+    assert.ok(sql.includes('"id" INTEGER PRIMARY KEY'));
+    assert.ok(sql.includes('"name" TEXT NOT NULL')); // Implicit not null
+    assert.ok(sql.includes('"email" TEXT')); // Nullable, no NOT NULL
+    assert.ok(sql.includes('"isActive" BOOLEAN NOT NULL DEFAULT TRUE'));
+    assert.ok(sql.includes('"score" INTEGER NOT NULL DEFAULT 0'));
 });
 
 test("DDL Generation - multiple tables", async () => {
@@ -45,7 +37,9 @@ test("DDL Generation - multiple tables", async () => {
     }, adapter);
 
     await db.createTables();
-    expect(adapter.logs.length).toBe(2);
-    expect(adapter.logs[0].sql).toContain("CREATE TABLE IF NOT EXISTS users");
-    expect(adapter.logs[1].sql).toContain("CREATE TABLE IF NOT EXISTS posts");
+
+    const logs = adapter.logs;
+    assert.strictEqual(logs.length, 2);
+    assert.ok(logs[0].sql.includes('CREATE TABLE IF NOT EXISTS "users"'));
+    assert.ok(logs[1].sql.includes('CREATE TABLE IF NOT EXISTS "posts"'));
 });

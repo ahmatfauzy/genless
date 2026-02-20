@@ -12,11 +12,14 @@ PawQL is a modern, type-safe database query builder designed for speed and simpl
 - ⚡ **Lightweight**: Minimal runtime overhead, perfect for Serverless/Edge.
 - 📦 **Modern Stack**: Built for TypeScript & Node.js (Bun compatible).
 
-### Supported Capabilities (v0.1.0)
+### Supported Capabilities (v0.2.0)
 - **CRUD**: Full `SELECT`, `INSERT`, `UPDATE`, `DELETE` support.
 - **Filtering**: Advanced `WHERE` clauses with `AND`, `OR`, `IN`, `LIKE`, `IS NULL`, comparison operators.
 - **Schema Sync**: Auto-generate tables with `db.createTables()` (DDL).
 - **Data Types**: `String`, `Number`, `Boolean`, `Date`, **`JSON`**, **`UUID`**, **`Enum`**, **`Array`**.
+- **Joins**: `INNER`, `LEFT`, `RIGHT`, `FULL` JOIN with full type inference.
+- **Transactions**: Atomic operations with automatic rollback on error.
+- **SQL Safety**: Automatic identifier quoting for reserved keywords.
 - **Database**: PostgreSQL (via `pg`).
 
 ## Installation
@@ -40,20 +43,25 @@ bun add pawql pg
 Use standard JS constructors or helper functions for advanced types.
 
 ```typescript
-import { createDB, uuid, json, enumType, arrayType } from 'pawql';
-import { PostgresAdapter } from 'pawql/adapters/pg';
+import { createDB, PostgresAdapter, uuid, json, enumType, arrayType } from 'pawql';
 
 const db = createDB({
   users: {
     id: uuid,                          // UUID type
     name: String,                      // TEXT
-    email: { type: String, unique: true },
+    email: { type: String, nullable: true },
     role: enumType('admin', 'user'),   // Check constraint
     tags: arrayType(String),           // TEXT[]
     metadata: json<{ lastLogin: string }>(), // JSONB with TS generic
     isActive: { type: Boolean, default: true }
+  },
+  posts: {
+    id: { type: Number, primaryKey: true },
+    user_id: Number,
+    title: String,
+    content: String,
   }
-}, new PostgresAdapter(process.env.DATABASE_URL));
+}, new PostgresAdapter({ connectionString: process.env.DATABASE_URL }));
 ```
 
 ### 2. Synchronize Database (DDL)
@@ -79,16 +87,17 @@ const newUser = await db.query('users').insert({
   role: 'admin',
   tags: ['developer', 'typescript'],
   metadata: { lastLogin: new Date().toISOString() }
-});
+}).execute();
 
-// B. SELECT causing Type Inference
+// B. SELECT with Type Inference
 const admins = await db.query('users')
   .select('id', 'name', 'email')
   .where({ 
     role: 'admin',
     isActive: true 
   })
-  .limit(10);
+  .limit(10)
+  .execute();
 // Result: { id: string, name: string, email: string }[]
 
 // C. ADVANCED FILTERING
@@ -96,12 +105,31 @@ const search = await db.query('users')
   .where({
     name: { like: '%Alice%' },         // LIKE
     role: { in: ['admin', 'super'] },  // IN
-    metadata: { not: null }            // IS NOT NULL
   })
   .orWhere({
     tags: { in: ['contributor'] }      // OR condition
   })
   .execute();
+
+// D. TRANSACTIONS
+await db.transaction(async (tx) => {
+  const user = await tx.query('users').insert({ 
+    id: crypto.randomUUID(), 
+    name: 'Bob',
+    role: 'user',
+    tags: [],
+    metadata: { lastLogin: '' }
+  }).execute();
+  // If anything fails here, everything rolls back automatically!
+});
+
+// E. JOINS
+const userPosts = await db.query('users')
+  .innerJoin('posts', 'users.id', '=', 'posts.user_id')
+  .select('users.name', 'posts.title')
+  .where({ 'users.isActive': true })
+  .execute();
+// Result type is automatically inferred from both tables!
 ```
 
 ## Philosophy
