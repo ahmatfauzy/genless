@@ -10,7 +10,7 @@
     "emitDeclarationOnly": false,
     "sourceMap": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "noEmit": false
   },
   "include": ["src"],
   "exclude": ["test", "**/*.test.ts", "dist", "node_modules"]

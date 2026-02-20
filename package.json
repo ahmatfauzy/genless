@@ -1,6 +1,6 @@
 {
   "name": "pawql",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "The Runtime-First ORM for TypeScript. Type-safe database query builder with zero code generation.",
   "type": "module",
   "main": "./dist/index.js",

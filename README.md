@@ -24,17 +24,15 @@ PawQL is a modern, type-safe database query builder designed for speed and simpl
 
 ## Installation
 
-COMINGSOON
+```bash
+# Install PawQL
+npm i pawql
 
-<!-- ```bash
-# Install PawQL and PostgreSQL driver
-npm install pawql pg
-
-# or using Bun
-bun add pawql pg
+# Install PostgreSQL driver (Required)
+npm i pg
 ```
 
-> **Note**: `pg` is a peer dependency. -->
+> **Note**: `pg` is a peer dependency, so you must install it alongside PawQL.
 
 ## Quick Start
 
