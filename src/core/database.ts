@@ -1,6 +1,6 @@
 
 import { DatabaseAdapter } from "./adapter";
-import { DatabaseSchema, TableSchema, InferTableType } from "../types/schema";
+import { DatabaseSchema, TableSchema, InferTableType, JsonType, UuidType, EnumType, ArrayType, ColumnConstructor } from "../types/schema";
 import { QueryBuilder } from "../query/builder";
 
 export class Database<TSchema extends DatabaseSchema> {
@@ -43,7 +43,6 @@ export class Database<TSchema extends DatabaseSchema> {
       const columns: string[] = [];
       
       for (const [colName, colSchema] of Object.entries(tableSchema as any)) {
-        // cast to any to iterate, but we know it's a TableSchema
         const schema = colSchema as any; 
         
         let sql = `${colName} `;
@@ -57,6 +56,14 @@ export class Database<TSchema extends DatabaseSchema> {
         if (typeof schema === 'function') {
           // Schema is just a constructor (e.g. Number)
           type = schema;
+        } else if (schema instanceof JsonType) {
+          type = schema;
+        } else if (schema instanceof UuidType) {
+          type = schema;
+        } else if (schema instanceof EnumType) {
+          type = schema;
+        } else if (schema instanceof ArrayType) {
+          type = schema;
         } else {
           // Schema is a complex definition object
           type = schema.type;
@@ -65,17 +72,37 @@ export class Database<TSchema extends DatabaseSchema> {
           defaultValue = schema.default;
         }
 
-        // Map JS types to SQL types
+        // Map types to SQL
         if (type === Number) sql += "INTEGER";
         else if (type === String) sql += "TEXT";
         else if (type === Boolean) sql += "BOOLEAN";
         else if (type === Date) sql += "TIMESTAMP";
+        else if (type instanceof JsonType) sql += "JSONB";
+        else if (type instanceof UuidType) sql += "UUID";
+        else if (type instanceof EnumType) {
+          sql += "TEXT";
+        }
+        else if (type instanceof ArrayType) {
+          // Map array item type to SQL base type
+          const itemType = type.itemType;
+          if (itemType === Number) sql += "INTEGER[]";
+          else if (itemType === String) sql += "TEXT[]";
+          else if (itemType === Boolean) sql += "BOOLEAN[]";
+          else if (itemType === Date) sql += "TIMESTAMP[]";
+          else throw new Error(`Unsupported array item type for column ${tableName}.${colName}`);
+        }
         else throw new Error(`Unsupported type for column ${tableName}.${colName}`);
 
         // Add constraints
         if (isPrimaryKey) sql += " PRIMARY KEY";
-        if (!isNullable && !isPrimaryKey) sql += " NOT NULL"; // Primary key implies Not Null usually
+        if (!isNullable && !isPrimaryKey) sql += " NOT NULL";
         
+        // Enum CHECK constraint
+        if (type instanceof EnumType && type.values.length > 0) {
+          const allowed = type.values.map((v: string) => `'${v}'`).join(', ');
+          sql += ` CHECK (${colName} IN (${allowed}))`;
+        }
+
         if (defaultValue !== undefined) {
           if (typeof defaultValue === 'string') sql += ` DEFAULT '${defaultValue}'`;
           else if (typeof defaultValue === 'number') sql += ` DEFAULT ${defaultValue}`;

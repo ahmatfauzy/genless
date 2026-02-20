@@ -9,12 +9,12 @@
 - [x] SELECT * (All columns support)
 - [x] Basic WHERE clause (AND only)
 - [x] LIMIT & OFFSET support
-- [x] Adapter Interface definition
+- [x] Adapter Interface definition  
 - [x] PostgreSQL Adapter (peer dependency: pg)
 - [x] Dummy/Test Adapter
 - [x] **Table Synchronization (DDL)**: `db.createTables()` to auto-generate SQL tables from JS schema
-- [ ] **Advanced Filtering**: Support `OR`, `IN`, `LIKE`, `IS NULL`, `BETWEEN`
-- [ ] **Data Types**: Support JSON, UUID, Enum, Arrays
+- [x] **Advanced Filtering**: Support `OR`, `IN`, `LIKE`, `IS NULL`, `BETWEEN`
+- [x] **Data Types**: Support JSON, UUID, Enum, Arrays
 - [ ] **Transactions**: `db.transaction(...)`   API
 - [ ] **Joins**: Basic `LEFT JOIN` / `INNER JOIN` support
 - [ ] **Migrations**: Basic migration system based on schema diff

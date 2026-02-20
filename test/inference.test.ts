@@ -33,7 +33,7 @@ describe("Query Builder Tests", () => {
 
         const query = db.query("users")
             .select("id", "name")
-            .where("isActive", "=", true)
+            .where({ isActive: true })
             .limit(10)
             .offset(0);
         
@@ -65,7 +65,7 @@ describe("Query Builder Tests", () => {
 
         const query = db.query("users")
             .update({ isActive: false })
-            .where("id", "=", 123);
+            .where({ id: 123 });
         
         const { sql, values } = query.toSQL();
         
@@ -79,7 +79,7 @@ describe("Query Builder Tests", () => {
 
         const query = db.query("posts")
             .delete()
-            .where("id", "=", 999);
+            .where({ id: 999 });
         
         const { sql, values } = query.toSQL();
         
