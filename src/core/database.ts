@@ -3,6 +3,8 @@ import { DatabaseAdapter, QueryResult } from "./adapter.js";
 import { DatabaseSchema, TableSchema, InferTableType, JsonType, UuidType, EnumType, ArrayType, ColumnConstructor } from "../types/schema.js";
 import { QueryBuilder, SoftDeleteConfig } from "../query/builder.js";
 import { PawQLLogger } from "./logger.js";
+import { HookRegistry, HookEvent, HookCallback } from "./hooks.js";
+import { RelationManager, RelationsSchema } from "./relations.js";
 
 /**
  * Configuration options for creating a PawQL database instance.
@@ -32,18 +34,6 @@ export interface DatabaseOptions {
    *     column: 'deleted_at',           // Optional, default: 'deleted_at'
    *   }
    * });
-   *
-   * // Soft delete a user (sets deleted_at = NOW())
-   * await db.query('users').where({ id: 1 }).softDelete().execute();
-   *
-   * // Restore a soft-deleted user
-   * await db.query('users').where({ id: 1 }).restore().execute();
-   *
-   * // Include soft-deleted rows
-   * await db.query('users').withTrashed().execute();
-   *
-   * // Only soft-deleted rows
-   * await db.query('users').onlyTrashed().execute();
    * ```
    */
   softDelete?: {
@@ -55,12 +45,33 @@ export interface DatabaseOptions {
      */
     column?: string;
   };
+
+  /**
+   * Relations configuration.
+   * Define `hasMany`, `belongsTo`, and `hasOne` relationships for auto-joins via `.with()`.
+   *
+   * @example
+   * ```typescript
+   * import { createDB, defineRelations, hasMany, belongsTo } from 'pawql';
+   *
+   * const relations = defineRelations({
+   *   users: { posts: hasMany('posts', 'userId') },
+   *   posts: { author: belongsTo('users', 'userId') },
+   * });
+   *
+   * const db = createDB(schema, adapter, { relations });
+   *
+   * // Auto-join
+   * const usersWithPosts = await db.query('users').with('posts').execute();
+   * ```
+   */
+  relations?: RelationsSchema;
 }
 
 /**
  * The main PawQL database class.
  * Provides type-safe query building, DDL generation, raw SQL execution,
- * and transaction management — all driven by the runtime schema.
+ * transaction management, hooks, and relation-based auto-joins — all driven by the runtime schema.
  *
  * @typeParam TSchema - The database schema object type
  *
@@ -81,12 +92,19 @@ export class Database<TSchema extends DatabaseSchema> {
   private _adapter: DatabaseAdapter;
   private _logger?: PawQLLogger;
   private _options?: DatabaseOptions;
+  private _hookRegistry: HookRegistry;
+  private _relationManager?: RelationManager;
 
   constructor(schema: TSchema, adapter: DatabaseAdapter, options?: DatabaseOptions) {
     this._schema = schema;
     this._adapter = options?.logger ? this._wrapAdapter(adapter, options.logger) : adapter;
     this._logger = options?.logger;
     this._options = options;
+    this._hookRegistry = new HookRegistry();
+
+    if (options?.relations) {
+      this._relationManager = new RelationManager(options.relations);
+    }
   }
 
   /**
@@ -106,7 +124,61 @@ export class Database<TSchema extends DatabaseSchema> {
    */
   query<K extends keyof TSchema & string>(tableName: K): QueryBuilder<InferTableType<TSchema[K]>, InferTableType<TSchema[K]>, TSchema> {
     const softDeleteConfig = this._getSoftDeleteConfig(tableName);
-    return new QueryBuilder<InferTableType<TSchema[K]>, InferTableType<TSchema[K]>, TSchema>(tableName, this._adapter, softDeleteConfig);
+    return new QueryBuilder<InferTableType<TSchema[K]>, InferTableType<TSchema[K]>, TSchema>(
+      tableName,
+      this._adapter,
+      softDeleteConfig,
+      this._relationManager,
+      this._hookRegistry
+    );
+  }
+
+  /**
+   * Register a lifecycle hook on a specific table (or all tables with `'*'`).
+   *
+   * Supported events:
+   * - `beforeInsert`, `afterInsert`
+   * - `beforeUpdate`, `afterUpdate`
+   * - `beforeDelete`, `afterDelete`
+   * - `beforeSelect`, `afterSelect`
+   *
+   * @param table - The table name, or `'*'` for all tables
+   * @param event - The lifecycle event
+   * @param callback - The hook function
+   *
+   * @example
+   * ```typescript
+   * db.hook('users', 'beforeInsert', (ctx) => {
+   *   // Auto-add timestamp
+   *   if (ctx.data && !Array.isArray(ctx.data)) {
+   *     ctx.data.createdAt = new Date();
+   *   }
+   * });
+   *
+   * db.hook('*', 'afterInsert', (ctx) => {
+   *   console.log(`Inserted into ${ctx.table}`);
+   * });
+   * ```
+   */
+  hook(table: string, event: HookEvent, callback: HookCallback): void {
+    this._hookRegistry.on(table, event, callback);
+  }
+
+  /**
+   * Remove hooks for a specific table (and optionally a specific event).
+   *
+   * @param table - The table name or '*'
+   * @param event - Optional event filter
+   */
+  unhook(table: string, event?: HookEvent): void {
+    this._hookRegistry.off(table, event);
+  }
+
+  /**
+   * Access the hook registry for advanced manipulation.
+   */
+  get hookRegistry(): HookRegistry {
+    return this._hookRegistry;
   }
 
   /**
@@ -220,7 +292,6 @@ export class Database<TSchema extends DatabaseSchema> {
         let defaultValue: any = undefined;
 
         if (typeof schema === 'function') {
-          // Schema is just a constructor (e.g. Number)
           type = schema;
         } else if (schema instanceof JsonType) {
           type = schema;
@@ -231,7 +302,6 @@ export class Database<TSchema extends DatabaseSchema> {
         } else if (schema instanceof ArrayType) {
           type = schema;
         } else {
-          // Schema is a complex definition object
           type = schema.type;
           isNullable = !!schema.nullable;
           isPrimaryKey = !!schema.primaryKey;
@@ -249,7 +319,6 @@ export class Database<TSchema extends DatabaseSchema> {
           sql += "TEXT";
         }
         else if (type instanceof ArrayType) {
-          // Map array item type to SQL base type
           const itemType = type.itemType;
           if (itemType === Number) sql += "INTEGER[]";
           else if (itemType === String) sql += "TEXT[]";
@@ -259,11 +328,9 @@ export class Database<TSchema extends DatabaseSchema> {
         }
         else throw new Error(`Unsupported type for column ${tableName}.${colName}`);
 
-        // Add constraints
         if (isPrimaryKey) sql += " PRIMARY KEY";
         if (!isNullable && !isPrimaryKey) sql += " NOT NULL";
         
-        // Enum CHECK constraint
         if (type instanceof EnumType && type.values.length > 0) {
           const allowed = type.values.map((v: string) => `'${v}'`).join(', ');
           sql += ` CHECK (${quotedCol} IN (${allowed}))`;
@@ -288,6 +355,7 @@ export class Database<TSchema extends DatabaseSchema> {
    * Run a callback within a database transaction.
    * The callback receives a new `Database` instance scoped to the transaction.
    * If the callback throws, the transaction is automatically rolled back.
+   * Hooks and relations are preserved in the transaction scope.
    *
    * @typeParam T - The return type of the callback
    * @param callback - Function to execute within the transaction scope
@@ -303,8 +371,9 @@ export class Database<TSchema extends DatabaseSchema> {
    */
   async transaction<T>(callback: (tx: Database<TSchema>) => Promise<T>): Promise<T> {
     return this._adapter.transaction(async (trxAdapter: DatabaseAdapter) => {
-      // Create a lightweight copy of the DB class with the transaction adapter
       const txDb = new Database(this._schema, trxAdapter, this._options);
+      // Share the hook registry with the transaction
+      (txDb as any)._hookRegistry = this._hookRegistry;
       return callback(txDb);
     });
   }
@@ -316,7 +385,7 @@ export class Database<TSchema extends DatabaseSchema> {
  * @typeParam TSchema - The database schema type (inferred from the schema object)
  * @param schema - The runtime schema definition object
  * @param adapter - The database adapter (e.g. `PostgresAdapter`, `DummyAdapter`)
- * @param options - Optional configuration (logger, etc.)
+ * @param options - Optional configuration (logger, hooks, relations, etc.)
  * @returns A fully typed {@link Database} instance
  *
  * @example

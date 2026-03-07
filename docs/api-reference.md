@@ -1020,3 +1020,151 @@ type SeedData<TSchema extends DatabaseSchema> = {
 
 See [Seeders Guide](./seeders.md) for detailed usage.
 
+---
+
+## Query Timeout
+
+### `.timeout(ms)`
+
+Set a per-query timeout. If the query exceeds the deadline, `PawQLTimeoutError` is thrown.
+
+```typescript
+db.query('users').timeout(5000).execute();
+```
+
+### `PawQLTimeoutError`
+
+```typescript
+class PawQLTimeoutError extends Error {
+  readonly timeoutMs: number;
+  readonly sql: string;
+}
+```
+
+See [Query Timeout Guide](./query-timeout.md) for detailed usage.
+
+---
+
+## Hooks / Middleware
+
+### `db.hook(table, event, callback)`
+
+Register a lifecycle hook on a table or globally (`'*'`).
+
+```typescript
+db.hook('users', 'beforeInsert', (ctx) => {
+  ctx.data.createdAt = new Date();
+});
+```
+
+### `db.unhook(table, event?)`
+
+Remove hooks for a table/event.
+
+### `HookEvent`
+
+```typescript
+type HookEvent =
+  | "beforeInsert" | "afterInsert"
+  | "beforeUpdate" | "afterUpdate"
+  | "beforeDelete" | "afterDelete"
+  | "beforeSelect" | "afterSelect";
+```
+
+### `HookContext`
+
+```typescript
+interface HookContext<T = any> {
+  table: string;
+  operation: "INSERT" | "UPDATE" | "DELETE" | "SELECT";
+  data?: Partial<T> | Partial<T>[];
+  result?: T[];
+}
+```
+
+### `HookRegistry`
+
+```typescript
+class HookRegistry {
+  on(table: string, event: HookEvent, callback: HookCallback): void;
+  off(table: string, event?: HookEvent): void;
+  clear(): void;
+  has(table: string, event: HookEvent): boolean;
+  get hooks(): ReadonlyArray<HookEntry>;
+}
+```
+
+See [Hooks Guide](./hooks.md) for detailed usage.
+
+---
+
+## Relations
+
+### `hasMany(to, foreignKey, localKey?)`
+
+Define a one-to-many relation.
+
+```typescript
+hasMany('posts', 'userId')           // users.id = posts.userId
+hasMany('posts', 'userId', 'uid')    // users.uid = posts.userId
+```
+
+### `belongsTo(to, foreignKey, localKey?)`
+
+Define a many-to-one relation.
+
+```typescript
+belongsTo('users', 'userId')  // posts.userId = users.id
+```
+
+### `hasOne(to, foreignKey, localKey?)`
+
+Define a one-to-one relation.
+
+```typescript
+hasOne('profiles', 'userId')  // users.id = profiles.userId
+```
+
+### `defineRelations(schema)`
+
+Build a resolved relations map from relation helper definitions.
+
+```typescript
+const relations = defineRelations({
+  users: { posts: hasMany('posts', 'userId') },
+  posts: { author: belongsTo('users', 'userId') },
+});
+```
+
+### `.with(relationName)`
+
+Auto-join a related table using a defined relation.
+
+```typescript
+db.query('users').with('posts').execute();
+// → SELECT * FROM "users" LEFT JOIN "posts" ON "users"."id" = "posts"."userId"
+```
+
+### `RelationDefinition`
+
+```typescript
+interface RelationDefinition {
+  type: "hasMany" | "belongsTo" | "hasOne";
+  from: string;
+  to: string;
+  foreignKey: string;
+  localKey?: string;
+}
+```
+
+### `RelationManager`
+
+```typescript
+class RelationManager {
+  get(table: string, name: string): RelationDefinition | undefined;
+  getAll(table: string): Record<string, RelationDefinition> | undefined;
+  resolveJoin(table: string, name: string): JoinParams | null;
+}
+```
+
+See [Relations Guide](./relations.md) for detailed usage.

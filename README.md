@@ -5,7 +5,6 @@
 PawQL is a modern, type-safe database query builder that infers types directly from your runtime schema definition. No CLI tools, no `.prisma` files, no generated code.
 
 [![npm version](https://img.shields.io/npm/v/pawql)](https://www.npmjs.com/package/pawql)
-![npm downloads](https://img.shields.io/npm/dw/pawql)
 [![CI](https://github.com/ahmatfauzy/pawql-orm/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmatfauzy/pawql-orm/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -28,7 +27,7 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - ⚡ **Lightweight Core** — Minimal abstraction, ideal for serverless & edge
 - 📦 **Modern** — ESM-first, works with Node.js and Bun
 
-### Capabilities (v0.7.0)
+### Capabilities (v0.8.0)
 
 - **CRUD**: `SELECT`, `INSERT`, `UPDATE`, `DELETE`
 - **Filtering**: `WHERE`, `OR`, `IN`, `LIKE`, `BETWEEN`, `IS NULL`, comparison operators
@@ -52,6 +51,9 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - **Integration Tests**: Comprehensive tests with real PostgreSQL via Docker
 - **Seeders**: `seed()` and `createSeeder()` for populating initial data with validation
 - **Parameter Validation**: Runtime `validateRow()` and `assertValid()` checks against schema types
+- **Query Timeout**: `.timeout(ms)` support with `PawQLTimeoutError` for canceling long-running queries
+- **Hooks / Middleware**: `db.hook()` for `beforeInsert`, `afterUpdate`, etc. with data mutation support
+- **Relations**: `hasMany`, `belongsTo`, `hasOne` with `.with()` auto-joins
 
 ## When Should You Use PawQL?
 
@@ -201,6 +203,82 @@ Supports all types: `Number`, `String`, `Boolean`, `Date`, `UUID`, `Enum`, `Arra
 
 See **[Parameter Validation Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/validation.md)** for full details.
 
+## Query Timeout
+
+Prevent long-running queries from blocking your application:
+
+```typescript
+import { PawQLTimeoutError } from 'pawql';
+
+try {
+  const users = await db.query('users')
+    .timeout(5000)  // 5 seconds
+    .execute();
+} catch (e) {
+  if (e instanceof PawQLTimeoutError) {
+    console.log(`Query timed out after ${e.timeoutMs}ms`);
+  }
+}
+```
+
+See **[Query Timeout Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/query-timeout.md)** for full details.
+
+## Hooks / Middleware
+
+Register lifecycle hooks for cross-cutting concerns:
+
+```typescript
+// Auto-add timestamps
+db.hook('users', 'beforeInsert', (ctx) => {
+  if (ctx.data && !Array.isArray(ctx.data)) {
+    ctx.data.createdAt = new Date();
+  }
+});
+
+// Global audit logging
+db.hook('*', 'afterInsert', (ctx) => {
+  console.log(`Inserted into ${ctx.table}`);
+});
+
+// Block dangerous operations
+db.hook('admin_settings', 'beforeDelete', () => {
+  throw new Error('Cannot delete admin settings!');
+});
+```
+
+See **[Hooks Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/hooks.md)** for full details.
+
+## Relations
+
+Define relationships for auto-joins with `.with()`:
+
+```typescript
+import { defineRelations, hasMany, belongsTo, hasOne } from 'pawql';
+
+const relations = defineRelations({
+  users: {
+    posts: hasMany('posts', 'userId'),
+    profile: hasOne('profiles', 'userId'),
+  },
+  posts: {
+    author: belongsTo('users', 'userId'),
+  },
+});
+
+const db = createDB(schema, adapter, { relations });
+
+// Auto-join — no manual join columns!
+const usersWithPosts = await db.query('users')
+  .with('posts')
+  .with('profile')
+  .execute();
+// → SELECT * FROM "users"
+//   LEFT JOIN "posts" ON "users"."id" = "posts"."userId"
+//   LEFT JOIN "profiles" ON "users"."id" = "profiles"."userId"
+```
+
+See **[Relations Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/relations.md)** for full details.
+
 ## Advanced Types
 
 ```typescript
@@ -268,6 +346,9 @@ For complete documentation, see the **[docs/](https://github.com/ahmatfauzy/pawq
 - **[Soft Delete](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/soft-delete.md)** — Soft delete with `.withTrashed()`, `.onlyTrashed()`
 - **[Seeders](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/seeders.md)** — Populate initial data with `seed()` and `createSeeder()`
 - **[Parameter Validation](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/validation.md)** — Runtime type validation with `validateRow()` and `assertValid()`
+- **[Query Timeout](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/query-timeout.md)** — Cancel long-running queries with `.timeout(ms)`
+- **[Hooks / Middleware](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/hooks.md)** — Lifecycle hooks: `beforeInsert`, `afterUpdate`, etc.
+- **[Relations](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/relations.md)** — `hasMany`, `belongsTo`, `hasOne` with `.with()` auto-joins
 - **[Testing](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/testing.md)** — Using DummyAdapter for unit tests + Docker integration tests
 - **[API Reference](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/api-reference.md)** — Complete API listing (logger, pool, all methods)
 

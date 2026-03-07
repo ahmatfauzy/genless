@@ -1,5 +1,7 @@
 import { DatabaseAdapter } from "../core/adapter.js";
 import { DatabaseSchema, InferTableType } from "../types/schema.js";
+import type { RelationManager } from "../core/relations.js";
+import type { HookRegistry, HookContext } from "../core/hooks.js";
 
 type WhereOperator =
   | "="
@@ -96,6 +98,35 @@ export function subquery<T extends Record<string, any>>(builder: QueryBuilder<T,
 }
 
 /**
+ * Error thrown when a query exceeds the configured timeout duration.
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await db.query('users').timeout(1000).execute();
+ * } catch (e) {
+ *   if (e instanceof PawQLTimeoutError) {
+ *     console.log(e.timeoutMs);  // 1000
+ *     console.log(e.sql);        // The SQL that timed out
+ *   }
+ * }
+ * ```
+ */
+export class PawQLTimeoutError extends Error {
+  /** The configured timeout in milliseconds. */
+  readonly timeoutMs: number;
+  /** The SQL query that timed out. */
+  readonly sql: string;
+
+  constructor(timeoutMs: number, sql: string) {
+    super(`Query timed out after ${timeoutMs}ms: ${sql.substring(0, 100)}${sql.length > 100 ? '...' : ''}`);
+    this.name = "PawQLTimeoutError";
+    this.timeoutMs = timeoutMs;
+    this.sql = sql;
+  }
+}
+
+/**
  * Configuration for soft delete behavior on a query builder.
  */
 export interface SoftDeleteConfig {
@@ -137,12 +168,23 @@ export class QueryBuilder<
   private _softDelete?: SoftDeleteConfig;
   private _withTrashed: boolean = false;
   private _onlyTrashed: boolean = false;
+  private _timeoutMs?: number;
+  private _relationManager?: RelationManager;
+  private _hookRegistry?: HookRegistry;
 
   /** @internal */
-  constructor(table: string, adapter: DatabaseAdapter, softDelete?: SoftDeleteConfig) {
+  constructor(
+    table: string,
+    adapter: DatabaseAdapter,
+    softDelete?: SoftDeleteConfig,
+    relationManager?: RelationManager,
+    hookRegistry?: HookRegistry
+  ) {
     this._table = table;
     this._adapter = adapter;
     this._softDelete = softDelete;
+    this._relationManager = relationManager;
+    this._hookRegistry = hookRegistry;
   }
 
   // --- CRUD Operations ---
@@ -534,6 +576,68 @@ export class QueryBuilder<
   }
 
   /**
+   * Set a timeout for this query in milliseconds.
+   * If the query takes longer than the specified duration, it will be cancelled
+   * and a `PawQLTimeoutError` will be thrown.
+   *
+   * @param ms - Timeout duration in milliseconds
+   * @returns The builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // Cancel if query takes more than 5 seconds
+   * const users = await db.query('users')
+   *   .timeout(5000)
+   *   .execute();
+   * ```
+   */
+  timeout(ms: number): this {
+    this._timeoutMs = ms;
+    return this;
+  }
+
+  /**
+   * Automatically join a related table using a pre-defined relation.
+   * Requires relations to be defined via `defineRelations()` and passed to `createDB()`.
+   *
+   * @param relationName - The relation name defined in `defineRelations()`
+   * @returns The builder for chaining
+   *
+   * @example
+   * ```typescript
+   * // Auto-join using defined relation
+   * const usersWithPosts = await db.query('users')
+   *   .with('posts')
+   *   .execute();
+   * // Generates: SELECT * FROM "users" LEFT JOIN "posts" ON "users"."id" = "posts"."userId"
+   * ```
+   */
+  with(relationName: string): this {
+    if (!this._relationManager) {
+      throw new Error(
+        `Cannot use .with('${relationName}') — no relations defined. ` +
+        `Pass relations to createDB(schema, adapter, { relations: defineRelations({...}) })`
+      );
+    }
+
+    const joinParams = this._relationManager.resolveJoin(this._table, relationName);
+    if (!joinParams) {
+      throw new Error(
+        `Relation "${relationName}" not found on table "${this._table}". ` +
+        `Check your defineRelations() configuration.`
+      );
+    }
+
+    this._joins.push({
+      type: joinParams.joinType,
+      table: joinParams.joinTable,
+      on: { col1: joinParams.col1, op: joinParams.op, col2: joinParams.col2 },
+    });
+
+    return this;
+  }
+
+  /**
    * Control the RETURNING clause for INSERT/UPDATE/DELETE.
    * - `.returning('id', 'name')` → RETURNING "id", "name"
    * - `.returning(false)` → No RETURNING clause
@@ -552,10 +656,23 @@ export class QueryBuilder<
 
   // --- Execution ---
 
+  /**
+   * Execute the query and return an array of results.
+   * If `.timeout()` was set, the query will be cancelled after the deadline.
+   * If hooks are registered, before/after hooks will be triggered.
+   */
   async execute(): Promise<TResult[]> {
+    // Run before hooks
+    await this._runBeforeHook();
+
     const { sql, values } = this.toSQL();
-    const result = await this._adapter.query<TResult>(sql, values);
-    return result.rows;
+    const result = await this._executeWithTimeout<TResult>(sql, values);
+    const rows = result.rows;
+
+    // Run after hooks
+    await this._runAfterHook(rows);
+
+    return rows;
   }
 
   /**
@@ -564,9 +681,12 @@ export class QueryBuilder<
    */
   async first(): Promise<TResult | null> {
     this._limit = 1;
+    await this._runBeforeHook();
     const { sql, values } = this.toSQL();
-    const result = await this._adapter.query<TResult>(sql, values);
-    return result.rows[0] ?? null;
+    const result = await this._executeWithTimeout<TResult>(sql, values);
+    const rows = result.rows;
+    await this._runAfterHook(rows);
+    return rows[0] ?? null;
   }
 
   /**
@@ -591,7 +711,7 @@ export class QueryBuilder<
     this._select = savedSelect;
     this._operation = savedOperation;
 
-    const result = await this._adapter.query<{ count: string | number }>(sql, values);
+    const result = await this._executeWithTimeout<{ count: string | number }>(sql, values);
     const row = result.rows[0];
     return row ? Number(row.count) : 0;
   }
@@ -603,6 +723,113 @@ export class QueryBuilder<
     onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
   ): PromiseLike<TResult1 | TResult2> {
     return this.execute().then(onfulfilled, onrejected);
+  }
+
+  // --- Internal: Timeout + Hooks ---
+
+  /**
+   * Execute a query with optional timeout.
+   * @internal
+   */
+  private async _executeWithTimeout<R>(sql: string, values: any[]): Promise<{ rows: R[] }> {
+    if (!this._timeoutMs) {
+      return this._adapter.query<R>(sql, values);
+    }
+
+    const timeoutMs = this._timeoutMs;
+    return new Promise<{ rows: R[] }>((resolve, reject) => {
+      let settled = false;
+
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          reject(new PawQLTimeoutError(timeoutMs, sql));
+        }
+      }, timeoutMs);
+
+      this._adapter
+        .query<R>(sql, values)
+        .then((result) => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            resolve(result);
+          }
+        })
+        .catch((err) => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            reject(err);
+          }
+        });
+    });
+  }
+
+  /**
+   * Map the current operation to a hook-friendly operation name.
+   * @internal
+   */
+  private _getHookOperation(): "INSERT" | "UPDATE" | "DELETE" | "SELECT" {
+    return this._operation;
+  }
+
+  /**
+   * Run matching before* hooks.
+   * @internal
+   */
+  private async _runBeforeHook(): Promise<void> {
+    if (!this._hookRegistry) return;
+
+    const op = this._getHookOperation();
+    const eventMap: Record<string, string> = {
+      INSERT: "beforeInsert",
+      UPDATE: "beforeUpdate",
+      DELETE: "beforeDelete",
+      SELECT: "beforeSelect",
+    };
+    const event = eventMap[op];
+    if (!event) return;
+
+    const context: HookContext = {
+      table: this._table,
+      operation: op,
+      data: this._data as any,
+    };
+
+    await this._hookRegistry.run(this._table, event as any, context);
+
+    // Allow hooks to mutate data (for beforeInsert/beforeUpdate)
+    if (context.data !== undefined && (op === "INSERT" || op === "UPDATE")) {
+      this._data = context.data as any;
+    }
+  }
+
+  /**
+   * Run matching after* hooks.
+   * @internal
+   */
+  private async _runAfterHook(result: any[]): Promise<void> {
+    if (!this._hookRegistry) return;
+
+    const op = this._getHookOperation();
+    const eventMap: Record<string, string> = {
+      INSERT: "afterInsert",
+      UPDATE: "afterUpdate",
+      DELETE: "afterDelete",
+      SELECT: "afterSelect",
+    };
+    const event = eventMap[op];
+    if (!event) return;
+
+    const context: HookContext = {
+      table: this._table,
+      operation: op,
+      data: this._data as any,
+      result,
+    };
+
+    await this._hookRegistry.run(this._table, event as any, context);
   }
 
   // Helper to quote identifiers (table/column names)

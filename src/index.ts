@@ -13,9 +13,18 @@ export type { ValidationError, ValidationResult, ValidateOptions } from "./core/
 export { seed, createSeeder } from "./core/seeder.js";
 export type { SeedData, SeederOptions, SeedResult } from "./core/seeder.js";
 
+// Hooks
+export { HookRegistry } from "./core/hooks.js";
+export type { HookEvent, HookCallback, HookContext, HookEntry } from "./core/hooks.js";
+
+// Relations
+export { hasMany, belongsTo, hasOne, defineRelations, RelationManager } from "./core/relations.js";
+export type { RelationType, RelationDefinition, RelationsSchema } from "./core/relations.js";
+
 // Query Builder
 export * from "./query/builder.js";
 export type { SoftDeleteConfig } from "./query/builder.js";
+export { PawQLTimeoutError } from "./query/builder.js";
 
 // Schema Helpers (Primitives)
 /** Alias for `Number` constructor — use as column type for INTEGER columns. */

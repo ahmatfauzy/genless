@@ -56,9 +56,9 @@
 - [x] **Soft Delete**: Native `deleted_at` handling (`.withTrashed()`, `.onlyTrashed()`)
 - [x] **Seeders**: Helper to populate initial data
 - [x] **Parameter Validation**: Runtime check for input values against schema types
-- [ ] **Query Timeout**: Support canceling long-running queries
-- [ ] **Hooks / Middleware**: `beforeInsert`, `afterUpdate`, etc.
-- [ ] **Relations**: Define `hasMany`, `belongsTo` in schema for auto-joins
+- [x] **Query Timeout**: Support canceling long-running queries
+- [x] **Hooks / Middleware**: `beforeInsert`, `afterUpdate`, etc.
+- [x] **Relations**: Define `hasMany`, `belongsTo` in schema for auto-joins
 - [ ] **Schema Introspection**: Generate PawQL schema from existing database
 - [ ] **Multi-database**: MySQL / SQLite adapter support
 
