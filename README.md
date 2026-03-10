@@ -71,15 +71,23 @@ Use PawQL if you:
 ## Installation
 
 ```bash
-npm install pawql pg
+# Core
+npm install pawql
+
+# Pick your database driver:
+npm install pg              # PostgreSQL
+npm install mysql2          # MySQL / MariaDB
+npm install better-sqlite3  # SQLite (Node.js) — Bun has built-in support
 ```
 
-> `pg` is a peer dependency for PostgreSQL connectivity.
+> Install only the driver you need. PawQL will auto-detect the runtime (Node.js or Bun) for SQLite.
 
 ## Quick Start
 
 ```typescript
 import { createDB, PostgresAdapter } from 'pawql';
+// or: import { createDB, MysqlAdapter } from 'pawql';
+// or: import { createDB, SqliteAdapter } from 'pawql';
 
 // 1. Define your schema using plain JS objects
 const db = createDB({
@@ -97,6 +105,8 @@ const db = createDB({
     content: String,
   }
 }, new PostgresAdapter({ connectionString: process.env.DATABASE_URL }));
+// or: new MysqlAdapter({ host: 'localhost', user: 'root', database: 'mydb' })
+// or: new SqliteAdapter('mydb.sqlite')  — or ':memory:' for tests
 
 // 2. Create tables (DDL)
 await db.createTables();
@@ -160,7 +170,7 @@ See **[Soft Delete Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs
 PawQL includes a built-in seeder to populate your database with initial or test data:
 
 ```typescript
-import { createDB, PostgresAdapter, seed } from 'pawql';
+import { seed } from 'pawql';
 
 await seed(db, {
   users: [
@@ -285,7 +295,7 @@ See **[Relations Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/r
 ## Advanced Types
 
 ```typescript
-import { createDB, PostgresAdapter, uuid, json, enumType, arrayType } from 'pawql';
+import { createDB, uuid, json, enumType, arrayType } from 'pawql';
 
 const db = createDB({
   events: {

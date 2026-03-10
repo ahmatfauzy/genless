@@ -5,7 +5,7 @@ PawQL supports per-query timeouts to prevent long-running queries from blocking 
 ## Basic Usage
 
 ```typescript
-import { createDB, PostgresAdapter } from 'pawql';
+import { createDB } from 'pawql';
 
 const db = createDB(schema, adapter);
 
@@ -24,10 +24,11 @@ The `.timeout(ms)` method wraps the underlying query in a `Promise.race()` again
 **Important:** The timeout is a *client-side* mechanism. It does _not_ send a `CANCEL` to the database server. For server-side timeouts with PostgreSQL, you can use the `statement_timeout` pool option instead:
 
 ```typescript
-const adapter = new PostgresAdapter({
+// Assuming adapter is correctly configured with a statement_timeout option
+const db = createDB(schema, new PostgresAdapter({
   connectionString: '...',
   statement_timeout: 5000,  // PostgreSQL server-side timeout
-});
+}));
 ```
 
 ## Supported Methods

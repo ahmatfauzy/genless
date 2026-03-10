@@ -5,7 +5,7 @@ PawQL supports lifecycle hooks that run before and after database operations. Us
 ## Quick Start
 
 ```typescript
-import { createDB, PostgresAdapter } from 'pawql';
+import { createDB } from 'pawql';
 
 const db = createDB(schema, adapter);
 

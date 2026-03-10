@@ -9,7 +9,7 @@ PawQL supports native **soft delete** — a pattern where records are marked as 
 Enable soft delete when creating your database instance by specifying which tables support it:
 
 ```typescript
-import { createDB, PostgresAdapter } from 'pawql';
+import { createDB } from 'pawql';
 
 const db = createDB({
   users: {
@@ -28,7 +28,7 @@ const db = createDB({
     name: String,
     // No deleted_at — soft delete not needed here
   },
-}, new PostgresAdapter({ connectionString: process.env.DATABASE_URL }), {
+}, adapter, {
   softDelete: {
     tables: ['users', 'posts'],  // Tables with soft delete enabled
     column: 'deleted_at',         // Optional, this is the default

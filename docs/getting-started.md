@@ -6,19 +6,20 @@ A complete guide to get up and running with PawQL.
 
 - **Node.js** 18+ or **Bun** 1.0+
 - **TypeScript** 5+
-- **PostgreSQL** database
+- A supported database: **PostgreSQL**, **MySQL/MariaDB**, or **SQLite**
 
 ## Installation
 
 ```bash
-# Using npm
-npm install pawql pg
+npm install pawql
 
-# Using Bun
-bun add pawql pg
+# Install your database driver:
+npm install pg              # PostgreSQL
+npm install mysql2          # MySQL / MariaDB
+npm install better-sqlite3  # SQLite (Node.js — Bun has built-in support)
 ```
 
-> **Note**: `pg` is a peer dependency. You must install it alongside PawQL.
+> Install only the driver you need. PawQL auto-detects the runtime for SQLite.
 
 ## First Setup
 
@@ -26,6 +27,8 @@ bun add pawql pg
 
 ```typescript
 import { createDB, PostgresAdapter } from 'pawql';
+// or: import { createDB, MysqlAdapter } from 'pawql';
+// or: import { createDB, SqliteAdapter } from 'pawql';
 
 const db = createDB({
   users: {
@@ -37,6 +40,8 @@ const db = createDB({
 }, new PostgresAdapter({
   connectionString: 'postgresql://user:password@localhost:5432/mydb'
 }));
+// or: new MysqlAdapter({ host: 'localhost', user: 'root', database: 'mydb' })
+// or: new SqliteAdapter('mydb.sqlite')  — or ':memory:' for tests
 ```
 
 ### 2. Synchronize Database (DDL)
@@ -73,25 +78,45 @@ console.log(users);
 await db.close();
 ```
 
-## PostgresAdapter Configuration
+## Adapter Configuration
+
+### PostgreSQL
 
 ```typescript
+import { PostgresAdapter } from 'pawql';
+
 const adapter = new PostgresAdapter({
-  // Option 1: Connection string
   connectionString: 'postgresql://user:pass@host:5432/db',
-  
-  // Option 2: Individual parameters
-  host: 'localhost',
-  port: 5432,
-  database: 'mydb',
-  user: 'postgres',
-  password: 'secret',
-  
-  // Connection pool (optional)
-  max: 20,           // Max connections in pool
-  idleTimeoutMillis: 30000,
+  // or individual parameters:
+  // host: 'localhost', port: 5432, database: 'mydb', user: 'postgres', password: 'secret',
+  max: 20,                    // Max pool connections
+  idleTimeoutMillis: 30000,   // Close idle clients after 30s
 });
 ```
+
+### MySQL / MariaDB
+
+```typescript
+import { MysqlAdapter } from 'pawql';
+
+const adapter = new MysqlAdapter({
+  host: 'localhost',
+  user: 'root',
+  password: 'secret',
+  database: 'mydb',
+});
+```
+
+### SQLite
+
+```typescript
+import { SqliteAdapter } from 'pawql';
+
+const adapter = new SqliteAdapter('mydb.sqlite');
+// or ':memory:' for in-memory databases (great for testing)
+```
+
+See the **[Adapters Guide](./adapters.md)** for more details.
 
 ## Recommended Project Structure
 
@@ -133,12 +158,13 @@ export const schema = {
 
 ```typescript
 import { createDB, PostgresAdapter, consoleLogger } from 'pawql';
+// or: import { createDB, MysqlAdapter, consoleLogger } from 'pawql';
+// or: import { createDB, SqliteAdapter, consoleLogger } from 'pawql';
 import { schema } from './schema.js';
 
 export const db = createDB(schema, new PostgresAdapter({
   connectionString: process.env.DATABASE_URL!,
-  max: 20,                    // Max pool connections
-  idleTimeoutMillis: 30000,   // Close idle clients after 30s
+  max: 20,
 }), {
   logger: consoleLogger,      // Optional: log all SQL to console
 });

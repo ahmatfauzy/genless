@@ -5,7 +5,7 @@ PawQL supports defining relationships between tables for automatic joins. Define
 ## Quick Start
 
 ```typescript
-import { createDB, PostgresAdapter, defineRelations, hasMany, belongsTo, hasOne } from 'pawql';
+import { createDB, defineRelations, hasMany, belongsTo, hasOne } from 'pawql';
 
 const schema = {
   users: {

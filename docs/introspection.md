@@ -13,11 +13,12 @@ Introspection is supported for:
 First, ensure you have a `pawql.config.ts` (or `.js`) file in your project root that exports your DatabaseAdapter:
 
 ```typescript
-// pawql.config.ts
+// pawql.config.js
 import { PostgresAdapter } from 'pawql';
 
 export default {
   adapter: new PostgresAdapter({ connectionString: 'postgres://user:pass@localhost:5432/mydb' }),
+  // or MysqlAdapter / SqliteAdapter
 };
 ```
 

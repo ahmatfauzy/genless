@@ -20,18 +20,18 @@ function createDB<TSchema extends DatabaseSchema>(
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `schema` | `DatabaseSchema` | Schema definition (table objects) |
-| `adapter` | `DatabaseAdapter` | Database adapter (PostgresAdapter, DummyAdapter) |
+| `adapter` | `DatabaseAdapter` | Database adapter (PostgresAdapter, MysqlAdapter, SqliteAdapter) |
 | `options` | `DatabaseOptions` | Optional config (logger, etc.) |
 
 **Returns:** `Database<TSchema>`
 
 **Example:**
 ```typescript
-import { createDB, PostgresAdapter, consoleLogger } from 'pawql';
+import { createDB, consoleLogger } from 'pawql';
 
 const db = createDB({
   users: { id: Number, name: String }
-}, new PostgresAdapter({ connectionString: '...' }), {
+}, adapter, {
   logger: consoleLogger,  // Optional: log all SQL queries
 });
 ```
@@ -482,7 +482,11 @@ const deletedUsers = await db.query('users').onlyTrashed().execute();
 
 ---
 
-## `PostgresAdapter`
+## Database Adapters
+
+PawQL supports PostgreSQL, MySQL, and SQLite.
+
+### `PostgresAdapter`
 
 Adapter for PostgreSQL using the `pg` library.
 
@@ -549,11 +553,12 @@ An array containing all executed queries.
 The migration manager class. Import from `pawql` or `pawql/migration`.
 
 ```typescript
-import { Migrator, PostgresAdapter } from 'pawql';
+import { Migrator } from 'pawql';
 
+// ...
 const migrator = new Migrator(adapter, {
   directory: './migrations',
-  tableName: 'pawql_migrations',
+  tableName: 'pawql_migrations'
 });
 ```
 

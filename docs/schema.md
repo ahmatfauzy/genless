@@ -152,7 +152,7 @@ const schema = {
 ## Multiple Tables
 
 ```typescript
-import { createDB, PostgresAdapter, uuid, enumType } from 'pawql';
+import { createDB, uuid, enumType } from 'pawql';
 
 const db = createDB({
   users: {

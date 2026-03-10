@@ -19,11 +19,15 @@ Create a `pawql.config.ts` (or `.js`/`.mjs`) in your project root:
 ```typescript
 // pawql.config.ts
 import { PostgresAdapter } from 'pawql';
+// or: import { MysqlAdapter } from 'pawql';
+// or: import { SqliteAdapter } from 'pawql';
 
 export default {
   adapter: new PostgresAdapter({
     connectionString: process.env.DATABASE_URL,
   }),
+  // or: adapter: new MysqlAdapter({ host: 'localhost', user: 'root', database: 'mydb' }),
+  // or: adapter: new SqliteAdapter('mydb.sqlite'),
 
   migrations: {
     directory: './migrations',       // default: './migrations'
@@ -251,10 +255,14 @@ You can also use the `Migrator` class directly from your code (e.g., in tests or
 
 ```typescript
 import { Migrator, PostgresAdapter } from 'pawql';
+// or: import { Migrator, MysqlAdapter } from 'pawql';
+// or: import { Migrator, SqliteAdapter } from 'pawql';
 
 const adapter = new PostgresAdapter({
   connectionString: process.env.DATABASE_URL,
 });
+// or: const adapter = new MysqlAdapter({ host: 'localhost', user: 'root', database: 'mydb' });
+// or: const adapter = new SqliteAdapter('mydb.sqlite');
 
 const migrator = new Migrator(adapter, {
   directory: './migrations',

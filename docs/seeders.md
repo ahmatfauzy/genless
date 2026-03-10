@@ -5,7 +5,7 @@ PawQL includes a built-in seeder utility for populating your database with initi
 ## Basic Usage
 
 ```typescript
-import { createDB, PostgresAdapter, seed } from 'pawql';
+import { createDB, seed } from 'pawql';
 
 const schema = {
   users: {
@@ -22,9 +22,8 @@ const schema = {
   },
 };
 
-const db = createDB(schema, new PostgresAdapter({
-  connectionString: process.env.DATABASE_URL,
-}));
+// Assuming adapter is correctly configured
+const db = createDB(schema, adapter);
 
 // Seed your database
 await seed(db, {
@@ -120,7 +119,7 @@ await seed(db, data, { validate: false });
 Use `createSeeder()` to create a reusable seeder function with default options:
 
 ```typescript
-import { createDB, PostgresAdapter, createSeeder } from 'pawql';
+import { createDB, createSeeder } from 'pawql';
 
 const db = createDB(schema, adapter);
 
